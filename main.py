@@ -12,6 +12,8 @@ from pydglab_ws import StrengthData, Channel, StrengthOperationType, RetCode, DG
 
 from Pulses import PULSE_DATA
 
+if not os.path.exists('config.yaml'): raise FileNotFoundError("config.yaml 不存在, "
+                                                              "docker内运行需通过-v参数传入此配置文件至/bot目录")
 test_config = read(os.path.join(os.path.dirname(__file__), "config.yaml"))
 ip_addr = test_config['ip_addr']
 pic_token = test_config['pic_token']
