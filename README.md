@@ -46,4 +46,4 @@
 <br><br>
 ### 开源协议
 
-  本代码遵循 [Apache-2.0 license](https://opensource.org/license/apache-2-0 ) 协议，传播时需包含本仓库链接
+  本代码遵循 Apache-2.0 license 协议，传播时需包含本仓库链接，记得点个star～(∠・ω< )⌒★
