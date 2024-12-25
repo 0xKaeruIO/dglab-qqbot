@@ -20,7 +20,7 @@
 
   本程序使用qq官方提供的PythonSDK及PyDGLab-WS库进行编写
   
-  使用前需于qq开放平台（ https://bot.q.qq.com/open ）注册并获取appid及secret key
+  使用前需于 [qq开放平台](https://bot.q.qq.com/open) 注册并获取appid及secret key
   
   文档详见 https://bot.q.qq.com/wiki/ 及 https://pydglab-ws.readthedocs.io
   <br><br>
@@ -46,4 +46,4 @@
 <br><br>
 ### 开源协议
 
-  本代码遵循 Apache-2.0 license 协议，传播时需包含本仓库链接
+  本代码遵循 [Apache-2.0 license](https://opensource.org/license/apache-2-0 ) 协议，传播时需包含本仓库链接
