@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import json
 import os
+from time import sleep
 
 import botpy
 import qrcode
@@ -19,6 +21,11 @@ ip_addr = test_config['ip_addr']
 pic_token = test_config['pic_token']
 _log = logging.get_logger()
 
+
+# TODO: 1.部分波形过长触发错误
+# TODO: 2.增加同时修改AB通道强度的功能
+# TODO: 3.优化close命令，强制断开连接
+# TODO: 4.增加多线程
 
 class UploadImgError(Exception):
     pass
@@ -61,6 +68,15 @@ class Commander:
         self.status_code = None  # 状态码，int，0为未占用，1为等待连接，2为已连接
         self.current_pulses_A = PULSE_DATA['呼吸']  # 当前波形列表，含默认波形
         self.current_pulses_B = PULSE_DATA['呼吸']
+
+    async def __send_pulse(self):
+        while True:
+            if self.pulse_close_tag:
+                self.pulse_close_tag = False
+                return
+            await self.client.add_pulses(Channel.A, *self.current_pulses_A * 3)
+            await self.client.add_pulses(Channel.B, *self.current_pulses_B * 3)
+            sleep(1)
 
     async def send_message(self, message: str):
         message_result = await self.message._api.post_group_message(
@@ -188,8 +204,6 @@ class Commander:
             self.status_code = 2
             _log.info(f"已与 App {self.client.target_id} 成功绑定")
 
-            # threading.Thread(target=await self._pulses_range()).start()
-
             # 异步轮询终端状态
             async for data in self.client.data_generator():
                 # 接收关闭标志
@@ -198,9 +212,11 @@ class Commander:
                     self.status_code = 0
                     _log.info("已主动断开连接")
                     return
-                for i in range(5):
-                    await self.client.add_pulses(Channel.A, *self.current_pulses_A * 5)
-                    await self.client.add_pulses(Channel.B, *self.current_pulses_B * 5)
+
+                asyncio.create_task(self.__send_pulse())
+                # for i in range(5):
+                #     await self.client.add_pulses(Channel.A, *self.current_pulses_A * 5)
+                #     await self.client.add_pulses(Channel.B, *self.current_pulses_B * 5)
                 # 接收通道强度数据
                 if isinstance(data, StrengthData):
                     _log.info(f"从 App 收到通道强度数据更新：{data}")
@@ -216,11 +232,13 @@ class Commander:
         if not await self.check_message({'A', 'B'}, PULSE_DATA): return
         if self.kwargs[0] == 'A':
             self.current_pulses_A = PULSE_DATA[self.kwargs[1]]
+            await self.client.clear_pulses(Channel.A)
             await self.send_message("已更改A通道波形，可能出现延迟")
             _log.info(f"已更改A通道波形为{self.kwargs[1]}")
             return
         elif self.kwargs[0] == 'B':
             self.current_pulses_B = PULSE_DATA[self.kwargs[1]]
+            await self.client.clear_pulses(Channel.B)
             await self.send_message("已更改A通道波形，可能出现延迟")
             _log.info(f"已更改B通道波形为{self.kwargs[1]}")
             return
