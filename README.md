@@ -50,15 +50,15 @@
 
 ## 3.加载镜像
 
-    ~~~
-    docker load -i qqbot.tar.gz
-    ~~~
+  ~~~
+  docker load -i qqbot.tar.gz
+  ~~~
 
 ## 4.传入配置文件并启动容器
 
-    ~~~
-    docker run --name mainbot -d -p 5678:5678 -v ./config.yaml:/bot/config.yaml qqbot
-    ~~~
+  ~~~
+  docker run --name mainbot -d -p 5678:5678 -v ./config.yaml:/bot/config.yaml qqbot
+  ~~~
 
 <br><br>
 
