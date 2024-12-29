@@ -2,7 +2,7 @@
 
 ## 主要功能
 
-使用 qqbot 在qq群中用命令连接 DG-LAB app，修改强度及波形
+使用 qqbot 在qq群中用命令连接 DG-LAB app，修改强度及波形，实现多对一的DGLAB终端控制
 
 ---
 <br>
@@ -48,11 +48,17 @@
 
 ## 2.配置文件
 
-## 3.传入配置文件并启动容器
+## 3.加载镜像
 
-  ~~~
-  docker run --name mainbot -d -p 5678:5678 -v ./config.yaml:/bot/config.yaml qqbot
-  ~~~
+    ~~~
+    docker load -i qqbot.tar.gz
+    ~~~
+
+## 4.传入配置文件并启动容器
+
+    ~~~
+    docker run --name mainbot -d -p 5678:5678 -v ./config.yaml:/bot/config.yaml qqbot
+    ~~~
 
 <br><br>
 

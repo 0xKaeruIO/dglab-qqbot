@@ -2,7 +2,6 @@
 import asyncio
 import json
 import os
-from time import sleep
 
 import botpy
 import qrcode
@@ -17,15 +16,14 @@ from Pulses import PULSE_DATA
 if not os.path.exists('config.yaml'): raise FileNotFoundError("config.yaml 不存在, "
                                                               "docker内运行需通过-v参数传入此配置文件至/bot目录")
 test_config = read(os.path.join(os.path.dirname(__file__), "config.yaml"))
-ip_addr = test_config['ip_addr']
+ip = test_config['ip_addr']
+port = test_config['port']
+ip_addr = ip + ':' + port
 pic_token = test_config['pic_token']
 _log = logging.get_logger()
 
 
-# TODO: 1.部分波形过长触发错误
-# TODO: 2.增加同时修改AB通道强度的功能
-# TODO: 3.优化close命令，强制断开连接
-# TODO: 4.增加多线程
+# TODO: 增加多线程，提审
 
 class UploadImgError(Exception):
     pass
@@ -76,7 +74,7 @@ class Commander:
                 return
             await self.client.add_pulses(Channel.A, *self.current_pulses_A * 3)
             await self.client.add_pulses(Channel.B, *self.current_pulses_B * 3)
-            sleep(1)
+            await asyncio.sleep(1)
 
     async def send_message(self, message: str):
         message_result = await self.message._api.post_group_message(
@@ -92,7 +90,6 @@ class Commander:
             return False
         # 参数数量检查
         if self.size - 1 != len(args):
-            await self.send_message(f'此命令应有{len(args)}个参数')
             _log.warning(f'此命令收到 {self.size - 1} 个参数')
             return False
 
@@ -171,9 +168,9 @@ class Commander:
             _log.info('重复连接的请求被拒')
             return
 
-        async with DGLabWSServer("0.0.0.0", 5678, 20) as self.sever:
+        async with DGLabWSServer("0.0.0.0", port, 20) as self.sever:
             self.client = self.sever.new_local_client()
-            _log.info(f"已创建DGLabWSServer，产生链接 {self.client.get_qrcode(ip_addr)}")
+            _log.info(f"已创建DGLabWSServer，产生二维码 {self.client.get_qrcode(ip_addr)}")
 
             # 上传二维码图片至sm.ms服务器
             make_qrcode(self.client.get_qrcode(ip_addr))
@@ -197,7 +194,7 @@ class Commander:
                 msg_id=self.message.id,
                 media=self.upload_media
             )
-            _log.info("qr码已发送，等待绑定")
+            _log.info("二维码已发送，等待绑定")
 
             self.status_code = 1
             await self.client.bind()
@@ -214,9 +211,7 @@ class Commander:
                     return
 
                 asyncio.create_task(self.__send_pulse())
-                # for i in range(5):
-                #     await self.client.add_pulses(Channel.A, *self.current_pulses_A * 5)
-                #     await self.client.add_pulses(Channel.B, *self.current_pulses_B * 5)
+
                 # 接收通道强度数据
                 if isinstance(data, StrengthData):
                     _log.info(f"从 App 收到通道强度数据更新：{data}")
@@ -229,84 +224,99 @@ class Commander:
                     return
 
     async def change_pulse(self):
-        if not await self.check_message({'A', 'B'}, PULSE_DATA): return
-        if self.kwargs[0] == 'A':
-            self.current_pulses_A = PULSE_DATA[self.kwargs[1]]
+        if await self.check_message(PULSE_DATA):
+            self.current_pulses_A = PULSE_DATA[self.kwargs[0]]
+            self.current_pulses_B = PULSE_DATA[self.kwargs[0]]
             await self.client.clear_pulses(Channel.A)
-            await self.send_message("已更改A通道波形，可能出现延迟")
-            _log.info(f"已更改A通道波形为{self.kwargs[1]}")
-            return
-        elif self.kwargs[0] == 'B':
-            self.current_pulses_B = PULSE_DATA[self.kwargs[1]]
             await self.client.clear_pulses(Channel.B)
-            await self.send_message("已更改A通道波形，可能出现延迟")
-            _log.info(f"已更改B通道波形为{self.kwargs[1]}")
+            await self.send_message(f"已更改A、B通道波形为{self.kwargs[0]}")
+            _log.info(f"已更改A、B通道波形为{self.kwargs[0]}")
             return
+        if await self.check_message({'A', 'B'}, PULSE_DATA):
+            if self.kwargs[0] == 'A':
+                self.current_pulses_A = PULSE_DATA[self.kwargs[1]]
+                await self.client.clear_pulses(Channel.A)
+                await self.send_message("已更改A通道波形")
+                _log.info(f"已更改A通道波形为{self.kwargs[1]}")
+                return
+            elif self.kwargs[0] == 'B':
+                self.current_pulses_B = PULSE_DATA[self.kwargs[1]]
+                await self.client.clear_pulses(Channel.B)
+                await self.send_message("已更改A通道波形")
+                _log.info(f"已更改B通道波形为{self.kwargs[1]}")
+                return
+        try: await self.send_message('change命令格式错误')
+        except RuntimeError: pass
+        _log.error('change命令意外退出')
 
     async def set(self):
-        if not await self.check_message({'A', 'B'}, (0, 200)): return
-
-        if self.kwargs[0] == 'A':
-            await self.client.set_strength(Channel.A, StrengthOperationType.SET_TO, self.kwargs[1])
-            await self.send_message(f'通道A强度已设置至 {self.kwargs[1]}')
-            _log.info(f'通道A强度已设置至 {self.kwargs[1]}')
+        if await self.check_message((0, 200)):
+            await self.client.set_strength(Channel.A, StrengthOperationType.SET_TO, self.kwargs[0])
+            await self.client.set_strength(Channel.B, StrengthOperationType.SET_TO, self.kwargs[0])
+            await self.send_message(f'通道A、B强度已设置至 {self.kwargs[0]}')
+            _log.info(f'通道A、B强度已设置至 {self.kwargs[0]}')
             return
-        elif self.kwargs[0] == 'B':
-            await self.client.set_strength(Channel.B, StrengthOperationType.SET_TO, self.kwargs[1])
-            await self.send_message(f'通道B强度已设置至 {self.kwargs[1]}')
-            _log.info(f'通道B强度已设置至 {self.kwargs[1]}')
-            return
-        _log.error('set命令意外退出')
+        if await self.check_message({'A', 'B'}, (0, 200)):
+            if self.kwargs[0] == 'A':
+                await self.client.set_strength(Channel.A, StrengthOperationType.SET_TO, self.kwargs[1])
+                await self.send_message(f'通道A强度已设置至 {self.kwargs[1]}')
+                _log.info(f'通道A强度已设置至 {self.kwargs[1]}')
+                return
+            elif self.kwargs[0] == 'B':
+                await self.client.set_strength(Channel.B, StrengthOperationType.SET_TO, self.kwargs[1])
+                await self.send_message(f'通道B强度已设置至 {self.kwargs[1]}')
+                _log.info(f'通道B强度已设置至 {self.kwargs[1]}')
+                return
+        try: await self.send_message('set命令格式错误')
+        except RuntimeError: pass
+        _log.error('set命令格式错误')
 
     async def increase(self):
-        if not await self.check_message({'A', 'B'}, (0, 200)): return
-
-        if self.kwargs[0] == 'A':
-            await self.client.set_strength(Channel.A, StrengthOperationType.INCREASE, self.kwargs[1])
-            await self.send_message(f'通道A强度已增加 {self.kwargs[1]}')
-            _log.info(f'通道A强度已增加 {self.kwargs[1]}')
+        if await self.check_message((0, 200)):
+            await self.client.set_strength(Channel.A, StrengthOperationType.INCREASE, self.kwargs[0])
+            await self.client.set_strength(Channel.B, StrengthOperationType.INCREASE, self.kwargs[0])
+            await self.send_message(f'通道A、B强度已增加 {self.kwargs[0]}')
+            _log.info(f'通道A、B强度已增加 {self.kwargs[0]}')
             return
-        elif self.kwargs[0] == 'B':
-            await self.client.set_strength(Channel.B, StrengthOperationType.INCREASE, self.kwargs[1])
-            await self.send_message(f'通道B强度已增加 {self.kwargs[1]}')
-            _log.info(f'通道B强度已增加 {self.kwargs[1]}')
-            return
-        _log.error('increase命令意外退出')
+        if await self.check_message({'A', 'B'}, (0, 200)):
+            if self.kwargs[0] == 'A':
+                await self.client.set_strength(Channel.A, StrengthOperationType.INCREASE, self.kwargs[1])
+                await self.send_message(f'通道A强度已增加 {self.kwargs[1]}')
+                _log.info(f'通道A强度已增加 {self.kwargs[1]}')
+                return
+            elif self.kwargs[0] == 'B':
+                await self.client.set_strength(Channel.B, StrengthOperationType.INCREASE, self.kwargs[1])
+                await self.send_message(f'通道B强度已增加 {self.kwargs[1]}')
+                _log.info(f'通道B强度已增加 {self.kwargs[1]}')
+                return
+        try: await self.send_message('increase命令格式错误')
+        except RuntimeError: pass
+        _log.error('increase命令格式错误')
 
     async def decrease(self):
-        if not await self.check_message({'A', 'B'}, (0, 200)): return
-
-        if self.kwargs[0] == 'A':
-            await self.client.set_strength(Channel.A, StrengthOperationType.DECREASE, self.kwargs[1])
-            await self.send_message(f'通道A强度已降低 {self.kwargs[1]}')
-            _log.info(f'通道A强度已降低 {self.kwargs[1]}')
+        if await self.check_message((0, 200)):
+            await self.client.set_strength(Channel.A, StrengthOperationType.DECREASE, self.kwargs[0])
+            await self.client.set_strength(Channel.B, StrengthOperationType.DECREASE, self.kwargs[0])
+            await self.send_message(f'通道A、B强度已降低 {self.kwargs[0]}')
+            _log.info(f'通道A、B强度已降低 {self.kwargs[0]}')
             return
-        elif self.kwargs[0] == 'B':
-            await self.client.set_strength(Channel.B, StrengthOperationType.DECREASE, self.kwargs[1])
-            await self.send_message(f'通道B强度已降低 {self.kwargs[1]}')
-            _log.info(f'通道B强度已降低 {self.kwargs[1]}')
-            return
-        _log.error('decrease命令意外退出')
-
-    # async def add_pulses(self):
-    #     if self.size != 3:
-    #         await self.send_message('参数数量错误')
-    #         _log.warning(f"参数数量错误：{self.size - 1}")
-    #         return
-    #     elif self.kwargs[0] not in ('A', 'B'):
-    #         await self.send_message('通道参数错误')
-    #         _log.warning(f'通道参数错误：{self.kwargs[0]}')
-    #         return
-    #     elif self.kwargs[1] not in PULSE_DATA:
-    #         await self.send_message('波形名称不存在')
-    #         _log.warning(f"波形名称不存在：{self.kwargs[1]}")
-    #         return
-    #     if self.kwargs[0] == 'A':
-    #         self.current_pulses_A.append(PULSE_DATA[self.kwargs[1]])
-    #         await self.send_message(f"{self.kwargs[1]}波形已添加至列表")
-    #         _log.info(f"{self.kwargs[1]}波形已添加至列表")
+        if await self.check_message({'A', 'B'}, (0, 200)):
+            if self.kwargs[0] == 'A':
+                await self.client.set_strength(Channel.A, StrengthOperationType.DECREASE, self.kwargs[1])
+                await self.send_message(f'通道A强度已降低 {self.kwargs[1]}')
+                _log.info(f'通道A强度已降低 {self.kwargs[1]}')
+                return
+            elif self.kwargs[0] == 'B':
+                await self.client.set_strength(Channel.B, StrengthOperationType.DECREASE, self.kwargs[1])
+                await self.send_message(f'通道B强度已降低 {self.kwargs[1]}')
+                _log.info(f'通道B强度已降低 {self.kwargs[1]}')
+                return
+        try: await self.send_message('decrease命令格式错误')
+        except RuntimeError: pass
+        _log.error('decrease命令格式错误')
 
     async def status(self):
+        _log.info('status命令执行')
         if self.size != 1: await self.send_message('status命令不应有参数')
         if self.status_code == 0:
             await self.send_message('当前未连接')
@@ -323,14 +333,13 @@ class Commander:
         await self.send_message("已发送断开连接信号，可能需要较长时间响应")
 
     async def help(self):
-        await self.send_message('这里是命令介绍喵~\r\n'
+        await self.send_message('这里是命令介绍喵~\r\n\r\n'
                                 'connect命令用于连接app，无参数，只可同时连接一个客户端\r\n'
-                                'set,increase,decrease命令用于设定、增加、减小指定通道的强度，如：set A 100\r\n'
+                                'set,increase,decrease命令用于设定、增加、减小指定通道的强度，如：set A 100或 set 100（同时设置双通道）\r\n'
                                 'status命令用于查看当前连接状况，强度大小，强度上限，无参数\r\n'
                                 'change命令用于更改指定通道波形，如：change A 潮汐，波形名称列表如下：\r\n'
                                 '呼吸、潮汐、连击、快速按捏、按捏渐强、心跳节奏、压缩、节奏步伐、颗粒摩擦、渐变弹跳、波浪涟漪、雨水冲刷、变速敲击、信号灯、挑逗1、挑逗2\r\n'
-                                'close命令用于关闭连接\r\n\r\n'
-                                'tips: 每隔一段时间波形会暂停输出，此时可通过点击app上任意形状按钮继续输出')
+                                'close命令用于关闭连接（不建议使用，建议直接从app中断开连接）\r\n')
 
 
 commander = Commander()
