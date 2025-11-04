@@ -6,3 +6,5 @@ __pycache__
 .vscode
 config.yaml
 qrcode.png
+botpy.log
+*botpy.log*
