@@ -4,6 +4,7 @@ import os
 import random
 import botpy
 import qrcode
+import yaml
 from botpy import logging
 from botpy.ext.cog_yaml import read
 from botpy.message import GroupMessage
@@ -11,14 +12,18 @@ from pydglab_ws import StrengthData, Channel, StrengthOperationType, RetCode, DG
 
 from Pulses import PULSE_DATA
 only_connect = False
-user_id_map={
-    "9C10419D9CDE8330DBA260226E4CBE8C": "呱呱",
-    "C11A7EBC654E78B55D1BBB6D072E5A97": "夜夜",
-    "872937AF91BB74702700B03F351AF538": "兔子",
-    "DFE8C12E443801D3C9C2AED5CA4F11E6": "烬烬",
-    "4FBD43047CC874F0ABABFD24652C54F0": "鲜橙汁",
-    "28525BD4672C51E990A8B75BAC37DBF8": "星野",
-}
+
+# 加载用户ID映射
+user_id_map_path = os.path.join(os.path.dirname(__file__), "user_id_map.yaml")
+if os.path.exists(user_id_map_path):
+    with open(user_id_map_path, "r", encoding="utf-8") as f:
+        yaml_data = yaml.safe_load(f) or {}
+    if "user_id_map" in yaml_data and isinstance(yaml_data["user_id_map"], dict):
+        user_id_map = yaml_data["user_id_map"]
+    else:
+        user_id_map = yaml_data if isinstance(yaml_data, dict) else {}
+else:
+    user_id_map = {}
 
 
 # 用户连接管理器
@@ -191,8 +196,8 @@ class Commander:
             await self.random_dice()
         elif self.command == '/用户列表':
             await self.user_list()
-        elif self.command == '/获取ID':
-            await self.get_my_user_id()
+        elif self.command == '/设置名称':
+            await self.setid2username()
         elif self.command == '/随机增加':
             await self.random_increase()
         elif self.command == '/随机降低':
@@ -288,6 +293,38 @@ class Commander:
                     user_conn['status'] = 'disconnected'
                     _log.info(f"用户{user_id_map.get(self.qq_id, self.qq_id)} App 端断开连接")
                     return
+    async def setid2username(self):
+        if self.size != 2:
+            await self.send_message('设置名称命令格式错误，应为：/设置名称 名称')
+            _log.warning(f'用户{self.qq_id}设置名称命令参数错误：{self.size - 1}个参数')
+            return
+        
+        new_name = self.kwargs[0]
+        
+        # 读取现有的YAML文件
+        if os.path.exists(user_id_map_path):
+            with open(user_id_map_path, 'r', encoding='utf-8') as f:
+                yaml_data = yaml.safe_load(f) or {}
+        else:
+            yaml_data = {}
+        
+        # 更新用户ID映射
+        if 'user_id_map' not in yaml_data:
+            yaml_data['user_id_map'] = {}
+        yaml_data['user_id_map'][self.qq_id] = new_name
+        
+        # 更新内存中的映射
+        user_id_map[self.qq_id] = new_name
+        
+        # 写回YAML文件
+        try:
+            with open(user_id_map_path, 'w', encoding='utf-8') as f:
+                yaml.dump(yaml_data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            await self.send_message(f'已设置名称：{new_name}')
+            _log.info(f'用户{self.qq_id}设置名称：{new_name}')
+        except Exception as e:
+            await self.send_message(f'保存名称失败：{str(e)}')
+            _log.error(f'用户{self.qq_id}保存名称失败：{e}')\
 
     async def change_pulse_for_all(self, *args):
         # args: (波形名,) 或 ('A', 波形名) 或 ('B', 波形名)
@@ -579,7 +616,7 @@ class Commander:
     async def random_decrease_all(self):
         # 必须是已连接用户才有权使用
         user_conn = user_manager.get_user_connection(self.qq_id)
-        if user_conn['status'] != 'connected' or not user_conn.get('commander') or not getattr(user_conn['commander'], 'client', None) and only_conecct:
+        if user_conn['status'] != 'connected' or not user_conn.get('commander') or not getattr(user_conn['commander'], 'client', None) and only_connect:
             await self.send_message("只有已连接的用户才可以使用随机降低命令")
             return
 
