@@ -4,18 +4,21 @@ import os
 import random
 import botpy
 import qrcode
+import yaml
 from botpy import logging
 from botpy.ext.cog_yaml import read
 from botpy.message import GroupMessage
 from pydglab_ws import StrengthData, Channel, StrengthOperationType, RetCode, DGLabWSServer
 
 from Pulses import PULSE_DATA
-user_id_map={
-    "9C10419D9CDE8330DBA260226E4CBE8C": "呱呱",
-    "C11A7EBC654E78B55D1BBB6D072E5A97": "夜夜",
-    "872937AF91BB74702700B03F351AF538": "兔子",
-    "DFE8C12E443801D3C9C2AED5CA4F11E6": "烬烬",
-}
+
+# 加载用户ID映射
+user_id_map_path = os.path.join(os.path.dirname(__file__), "user_id_map.yaml")
+if os.path.exists(user_id_map_path):
+    yaml_data = read(user_id_map_path)
+    user_id_map = yaml_data.get('user_id_map', {})
+else:
+    user_id_map = {}
 
 
 # 用户连接管理器
@@ -173,8 +176,8 @@ class Commander:
             await self.help()
         elif self.command == '/用户列表':
             await self.user_list()
-        elif self.command == '/获取ID':
-            await self.get_my_user_id()
+        elif self.command == '/设置名称':
+            await self.setid2username()
         elif self.command == '/随机增加':
             await self.random_increase()
         elif self.command == '/随机降低':
@@ -709,7 +712,39 @@ class Commander:
         self.pulse_close_tag = True
         _log.info(f'用户{self.qq_id} close_tag已发送')
         await self.send_message("已发送断开连接信号，可能需要较长时间响应")
-
+    async def setid2username(self):
+        if self.size != 2:
+            await self.send_message('设置名称命令格式错误，应为：/设置名称 名称')
+            _log.warning(f'用户{self.qq_id}设置名称命令参数错误：{self.size - 1}个参数')
+            return
+        
+        new_name = self.kwargs[0]
+        
+        # 读取现有的YAML文件
+        if os.path.exists(user_id_map_path):
+            with open(user_id_map_path, 'r', encoding='utf-8') as f:
+                yaml_data = yaml.safe_load(f) or {}
+        else:
+            yaml_data = {}
+        
+        # 更新用户ID映射
+        if 'user_id_map' not in yaml_data:
+            yaml_data['user_id_map'] = {}
+        yaml_data['user_id_map'][self.qq_id] = new_name
+        
+        # 更新内存中的映射
+        user_id_map[self.qq_id] = new_name
+        
+        # 写回YAML文件
+        try:
+            with open(user_id_map_path, 'w', encoding='utf-8') as f:
+                yaml.dump(yaml_data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            await self.send_message(f'已设置名称：{new_name}')
+            _log.info(f'用户{self.qq_id}设置名称：{new_name}')
+        except Exception as e:
+            await self.send_message(f'保存名称失败：{str(e)}')
+            _log.error(f'用户{self.qq_id}保存名称失败：{e}')
+        
     async def user_list(self):
         """显示所有用户列表（支持@用户）"""
         users = user_manager.get_all_users()
@@ -747,7 +782,7 @@ class Commander:
                                 '呼吸、潮汐、连击、快速按捏、按捏渐强、心跳节奏、压缩、节奏步伐、颗粒摩擦、渐变弹跳、波浪涟漪、雨水冲刷、变速敲击、信号灯、挑逗1、挑逗2\r\n'
                                 '「用户列表」命令用于查看所有当前用户及其连接状态\r\n'
                                 '「全体随机增加」,「全体随机降低」命令用于随机增加或降低所有已连接用户的强度，如：全体随机增加 100 或 全体随机降低 100\r\n'
-                                '「获取ID」命令用于获取当前用户的ID,获取后联系呱呱糕添加进去\r\n'
+                                '「设置名称」设置自己的名称，格式如：设置名称 呱呱糕\r\n'
                                 '「帮助」命令用于查看所有命令\r\n'
                                 )
 
