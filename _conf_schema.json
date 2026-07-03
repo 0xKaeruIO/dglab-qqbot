@@ -1,0 +1,26 @@
+{
+  "command_prefix": {
+    "description": "命令前缀",
+    "type": "string",
+    "default": "dgkab",
+    "hint": "发送消息时以前缀开头，例如「dgkab帮助」或「dgkab 帮助」"
+  },
+  "ip_addr": {
+    "description": "DGLab WebSocket 地址（不含端口）",
+    "type": "string",
+    "default": "ws://127.0.0.1",
+    "hint": "手机 App 扫码连接用的地址，需填写 Bot 所在机器可被手机访问的 IP 或域名"
+  },
+  "base_port": {
+    "description": "DGLab WebSocket 起始端口",
+    "type": "int",
+    "default": 5678,
+    "hint": "每个用户会分配独立端口，从该值起递增"
+  },
+  "qr_image_url": {
+    "description": "二维码图片 URL（可选）",
+    "type": "string",
+    "default": "",
+    "hint": "留空则直接发送本地生成的二维码图片；若 Bot 与 NapCat 不在同一台机器，可填写图床 URL"
+  }
+}

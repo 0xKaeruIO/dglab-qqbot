@@ -6,4 +6,5 @@ __pycache__
 .vscode
 config.yaml
 qrcode.png
+data/qrcodes/
 *.log

@@ -1,0 +1,10 @@
+name: astrbot_plugin_dglab
+display_name: DGLAB 群控
+desc: 在 QQ 群中通过命令连接 DG-LAB App，控制强度及波形，支持多用户独立连接
+version: v2.0.0
+author: 0xKaeruIO
+repo: https://github.com/0xKaeruIO/dglab-qqbot
+astrbot_version: ">=4.23.0"
+support_platforms:
+  - aiocqhttp
+  - qq_official
